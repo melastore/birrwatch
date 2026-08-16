@@ -10,49 +10,43 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - name: TCP and TLS
+      - name: Does normal TLS verification work now?
         run: |
-          timeout 15 bash -c 'cat < /dev/null > /dev/tcp/api.nbe.gov.et/443' \
-            && echo "tcp443 open" || echo "tcp443 FAILED"
-          echo | timeout 20 openssl s_client -connect api.nbe.gov.et:443 -servername api.nbe.gov.et 2>/dev/null \
-            | openssl x509 -noout -subject -issuer 2>/dev/null || echo "tls no-certificate"
+          curl -sS -o /dev/null -w 'verified-main code=%{http_code}\n' --max-time 20 \
+            https://nbe.gov.et/exchange/ || echo "verified-main FAILED"
+          curl -sS -o /dev/null -w 'verified-api  code=%{http_code}\n' --max-time 20 \
+            https://api.nbe.gov.et/ || echo "verified-api FAILED"
 
-      - name: Plain request
+      - name: Candidate endpoints
         run: |
-          curl -sSk -o /dev/null -w 'plain code=%{http_code} time=%{time_total}\n' \
-            --max-time 25 "https://api.nbe.gov.et/api/filter-exchange-rates?date=2026-08-14" \
-            || echo "plain FAILED"
-
-      - name: Browser-like headers
-        run: |
-          curl -sSk -o out.json -w 'browserish code=%{http_code} time=%{time_total} bytes=%{size_download}\n' \
-            --max-time 25 \
-            -H 'User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36' \
-            -H 'Accept: application/json, text/plain, */*' \
-            -H 'Accept-Language: en-US,en;q=0.9' \
-            -H 'Origin: https://nbe.gov.et' \
-            -H 'Referer: https://nbe.gov.et/' \
+          for u in \
             "https://api.nbe.gov.et/api/filter-exchange-rates?date=2026-08-14" \
-            || echo "browserish FAILED"
-          echo "--- body ---"
-          head -c 700 out.json 2>/dev/null || true
-          echo
-
-      - name: Same path on the main host
-        run: |
-          curl -sSk -o main.json -w 'mainhost code=%{http_code} time=%{time_total} bytes=%{size_download}\n' \
-            --max-time 25 \
-            -H 'Referer: https://nbe.gov.et/' \
+            "https://api.nbe.gov.et/api/exchange-rates" \
+            "https://api.nbe.gov.et/api/filter-exchange-rates" \
             "https://nbe.gov.et/api/filter-exchange-rates?date=2026-08-14" \
-            || echo "mainhost FAILED"
-          head -c 400 main.json 2>/dev/null || true
-          echo
+            "https://api.nbe.gov.et/" ; do
+            code=$(curl -sS -o /tmp/o -w '%{http_code}' --max-time 20 "$u" 2>/dev/null || echo 000)
+            ct=$(file -b --mime-type /tmp/o 2>/dev/null || echo "?")
+            echo "$code  $ct  $u"
+          done
+
+      - name: Is the exchange page server-rendering rates now?
+        run: |
+          curl -sS -o ex.html --max-time 25 https://nbe.gov.et/exchange/ || true
+          echo "bytes: $(wc -c < ex.html)"
+          echo "tables: $(grep -oic '<table' ex.html || echo 0)"
+          echo "empty tbody present: $(grep -c 'exchangeData2q1' ex.html || echo 0)"
+          echo "--- rows inside the rate tbody, if any ---"
+          python3 - <<'PY'
+          import re
+          s=open("ex.html",encoding="utf-8",errors="replace").read()
+          m=re.search(r'<tbody id="exchangeData2q1".*?</tbody>', s, re.S)
+          print(repr(m.group(0)[:400]) if m else "tbody not found")
+          PY
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: apicheck
-          path: |
-            out.json
-            main.json
+          path: ex.html
           if-no-files-found: warn
