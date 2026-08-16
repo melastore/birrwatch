@@ -1,0 +1,44 @@
+name: API reachability check
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: TCP and TLS reach the host at all?
+        run: |
+          timeout 15 bash -c 'cat < /dev/null > /dev/tcp/api.nbe.gov.et/443' \
+            && echo "tcp 443: open" || echo "tcp 443: FAILED"
+          echo | timeout 20 openssl s_client -connect api.nbe.gov.et:443 -servername api.nbe.gov.et 2>/dev/null \
+            | openssl x509 -noout -subject -issuer 2>/dev/null || echo "tls: no certificate returned"
+
+      - name: Plain request
+        run: curl -sSk -o /dev/null -w "plain: code=%{http_code} time=%{time_total}s\n" --max-time 25 \
+              "https://api.nbe.gov.et/api/filter-exchange-rates?date=2026-08-14" || echo "plain: FAILED"
+
+      - name: Browser-like headers
+        run: |
+          curl -sSk -o out.json -w "browserish: code=%{http_code} time=%{time_total}s bytes=%{size_download}\n" --max-time 25 \
+            -H "User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36" \
+            -H "Accept: application/json, text/plain, */*" \
+            -H "Accept-Language: en-US,en;q=0.9" \
+            -H "Origin: https://nbe.gov.et" \
+            -H "Referer: https://nbe.gov.et/" \
+            "https://api.nbe.gov.et/api/filter-exchange-rates?date=2026-08-14" || echo "browserish: FAILED"
+          head -c 600 out.json 2>/dev/null; echo
+
+      - name: Same path on the main host
+        run: curl -sSk -o /dev/null -w "main-host: code=%{http_code} time=%{time_total}s\n" --max-time 25 \
+              "https://nbe.gov.et/api/filter-exchange-rates?date=2026-08-14" || echo "main-host: FAILED"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: apicheck
+          path: out.json
+          if-no-files-found: warn
