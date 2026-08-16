@@ -14,25 +14,24 @@ import (
 // DefaultMarketAPI returns every rate against a USD base in one request.
 const DefaultMarketAPI = "https://open.er-api.com/v6/latest/USD"
 
-// marketCurrencies are the currencies recorded.
+// marketCurrencies are the currencies recorded — ten, chosen for relevance to
+// Ethiopia rather than for coverage.
 //
-// The list leads with the set NBE publishes, so the two series stay directly
-// comparable once NBE is available again, then extends to the currencies that
-// actually matter around Ethiopia: the Gulf states and East African neighbours
-// (remittances and cross-border trade) and the majors used for import pricing.
-// It is a fixed list rather than "everything the provider returns" so the
-// dataset does not silently change shape when the upstream adds a currency.
+// All ten are on NBE's own list, so the two series stay directly comparable
+// once their endpoint is available again. It is a fixed list rather than
+// "everything the provider returns" so the dataset does not silently change
+// shape when the upstream adds a currency.
 var marketCurrencies = []string{
-	// Published by NBE.
-	"USD", "EUR", "GBP", "JPY", "CHF", "CAD", "AUD",
-	"SAR", "AED", "CNY", "INR", "ZAR", "KES", "SEK", "NOK", "DKK",
-	// Gulf — remittances and trade.
-	"KWD", "QAR", "BHD", "OMR", "ILS", "JOD", "LBP", "TRY",
-	// East and North Africa — neighbours and regional trade.
-	"DJF", "SDG", "SOS", "EGP", "TZS", "UGX", "RWF", "NGN", "GHS", "MAD",
-	// Majors and manufacturing partners.
-	"SGD", "HKD", "NZD", "KRW", "RUB", "BRL", "MXN", "PLN", "CZK",
-	"THB", "MYR", "IDR", "PHP", "VND", "PKR", "BDT", "LKR",
+	"USD", // the rate everything else is judged against
+	"EUR",
+	"GBP",
+	"AED", // UAE — the largest remittance and re-export corridor
+	"SAR", // Saudi Arabia — the largest labour-migration corridor
+	"CNY", // China — Ethiopia's biggest trade partner
+	"DJF", // Djibouti — effectively all seaborne imports transit here
+	"KES", // Kenya — the main regional neighbour for trade
+	"JPY",
+	"CHF",
 }
 
 // Market reads reference rates from a public FX aggregator.
