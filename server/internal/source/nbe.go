@@ -2,11 +2,14 @@ package source
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -16,10 +19,20 @@ import (
 	"github.com/melastore/birrwatch/internal/model"
 )
 
-// DefaultNBEURL is the National Bank of Ethiopia daily indicative rate page.
-const DefaultNBEURL = "https://nbe.gov.et/exchange-rate/"
+// DefaultNBEURL is the National Bank of Ethiopia rates page.
+//
+// Not /exchange-rate/ — that page renders its figures client-side through a
+// charting plugin and its served HTML contains no table at all. /exchange/ is
+// the one that ships the rates as markup.
+const DefaultNBEURL = "https://nbe.gov.et/exchange/"
 
-// NBE scrapes the National Bank of Ethiopia daily indicative rates.
+// nbeSubjectCN is the Common Name on the certificate NBE presents.
+const nbeSubjectCN = "*.nbe.gov.et"
+
+// nbeOrg is the Organization on that certificate.
+const nbeOrg = "National Bank of Ethiopia"
+
+// NBE scrapes the National Bank of Ethiopia rates page.
 type NBE struct {
 	URL    string
 	Client *http.Client
@@ -28,9 +41,71 @@ type NBE struct {
 // NewNBE returns an NBE source pointed at the default page.
 func NewNBE() *NBE {
 	return &NBE{
-		URL: DefaultNBEURL,
-		Client: &http.Client{
-			Timeout: 30 * time.Second,
+		URL:    DefaultNBEURL,
+		Client: newNBEClient(pinnedTLS()),
+	}
+}
+
+// NewNBEStrict returns a source that requires ordinary certificate validation.
+// It will fail against NBE as currently configured; it exists so the relaxed
+// path is a deliberate choice rather than the only one on offer.
+func NewNBEStrict() *NBE {
+	return &NBE{URL: DefaultNBEURL, Client: newNBEClient(nil)}
+}
+
+func newNBEClient(tlsCfg *tls.Config) *http.Client {
+	tr := http.DefaultTransport.(*http.Transport).Clone()
+	tr.TLSClientConfig = tlsCfg
+	return &http.Client{Timeout: 30 * time.Second, Transport: tr}
+}
+
+// pinnedTLS builds a TLS config for a host that cannot pass normal validation.
+//
+// NBE serves a self-signed certificate with no subjectAltName extension. Go has
+// ignored the legacy CommonName field since 1.15, so the handshake fails with
+// "certificate is not valid for any names" — and adding their certificate as a
+// trusted root does not help, because the failure is the missing SAN, not an
+// untrusted chain. There is no configuration that makes standard verification
+// succeed against this server.
+//
+// Rather than switch verification off wholesale, this disables Go's built-in
+// check and substitutes a narrower one: the leaf must carry NBE's own subject.
+// That is weaker than a real PKI — it proves possession of a certificate
+// bearing that name, not that the operator is NBE — so it is not a defence
+// against a determined man-in-the-middle. It is enough for public,
+// non-sensitive, read-only data, and it still rejects a server presenting some
+// unrelated certificate, which blanket InsecureSkipVerify would happily accept.
+//
+// Every response is archived verbatim, so anything odd that arrives this way
+// stays auditable after the fact.
+func pinnedTLS() *tls.Config {
+	return &tls.Config{
+		MinVersion: tls.VersionTLS12,
+		// Go's own name and chain validation is replaced, not merely relaxed:
+		// VerifyPeerCertificate below runs in its place and rejects anything
+		// that is not NBE's certificate.
+		InsecureSkipVerify: true,
+		VerifyPeerCertificate: func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
+			if len(rawCerts) == 0 {
+				return errors.New("nbe tls: server presented no certificate")
+			}
+			leaf, err := x509.ParseCertificate(rawCerts[0])
+			if err != nil {
+				return fmt.Errorf("nbe tls: parse leaf: %w", err)
+			}
+			if leaf.Subject.CommonName != nbeSubjectCN {
+				return fmt.Errorf("nbe tls: unexpected certificate CN %q (want %q)",
+					leaf.Subject.CommonName, nbeSubjectCN)
+			}
+			if !slices.Contains(leaf.Subject.Organization, nbeOrg) {
+				return fmt.Errorf("nbe tls: unexpected certificate organization %v (want %q)",
+					leaf.Subject.Organization, nbeOrg)
+			}
+			if now := time.Now(); now.Before(leaf.NotBefore) || now.After(leaf.NotAfter) {
+				return fmt.Errorf("nbe tls: certificate outside validity window (%s to %s)",
+					leaf.NotBefore.Format(time.RFC3339), leaf.NotAfter.Format(time.RFC3339))
+			}
+			return nil
 		},
 	}
 }

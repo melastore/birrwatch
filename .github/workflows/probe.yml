@@ -11,35 +11,36 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Fetch the page
-        run: curl -sSk -o /tmp/p.html -w "%{http_code} bytes=%{size_download}\n" --max-time 25 https://nbe.gov.et/exchange-rate/
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+          cache-dependency-path: server/go.sum
 
-      - name: Look for a rate table or a data endpoint
-        run: |
-          echo "--- table-ish markup ---"
-          grep -ioE '<table|tablepress|datatable|<tbody' /tmp/p.html | sort | uniq -c || echo none
-          echo "--- currency words ---"
-          grep -ioE 'currency|buying|selling|exchange rate' /tmp/p.html | sort | uniq -c || echo none
-          echo "--- candidate endpoints ---"
-          grep -oE 'https?://[^"'"'"' ]*(wp-json|admin-ajax|rest_route|\.json)[^"'"'"' ]*' /tmp/p.html | sort -u | head -20 || echo none
-          echo "--- script srcs ---"
-          grep -oE 'src="[^"]+\.js[^"]*"' /tmp/p.html | sed 's/src="//;s/"$//' | sort -u | head -25 || echo none
-          echo "--- inline hints ---"
-          grep -oiE '(usd|dollar|birr)[^<]{0,60}' /tmp/p.html | head -15 || echo none
+      - name: Build
+        working-directory: server
+        run: CGO_ENABLED=0 go build -o ../bin/birrscrape ./cmd/birrscrape
 
-      - name: Try the WordPress REST index
-        run: |
-          curl -sSk -o /tmp/api.json -w "wp-json: %{http_code} bytes=%{size_download}\n" --max-time 25 https://nbe.gov.et/wp-json/ || true
-          grep -oE '"/[a-z0-9v/_-]*(exchange|rate|currency)[a-z0-9v/_-]*"' /tmp/api.json | sort -u | head -20 || echo "no rate routes"
+      - name: Scrape the live site
+        run: ./bin/birrscrape -db probe.db -source nbe
 
-      - name: Try common rate endpoints
+      - name: Show what was parsed
         run: |
-          for p in \
-            "/wp-json/wp/v2/pages?search=exchange" \
-            "/wp-json/nbe/v1/exchange" \
-            "/wp-admin/admin-ajax.php?action=get_exchange_rate" \
-            "/exchange/" \
-            "/fx/" ; do
-            code=$(curl -sSk -o /tmp/t.out -w "%{http_code}" --max-time 20 "https://nbe.gov.et$p" || echo 000)
-            echo "$code  $p  bytes=$(wc -c < /tmp/t.out 2>/dev/null || echo 0)  tables=$(grep -ioc '<table' /tmp/t.out 2>/dev/null || echo 0)"
-          done
+          sudo apt-get install -qq -y sqlite3 >/dev/null 2>&1
+          echo "--- rates ---"
+          sqlite3 -header -column probe.db "SELECT currency, date, buying, selling FROM rates ORDER BY currency;"
+          echo "--- counts ---"
+          sqlite3 probe.db "SELECT 'rows', COUNT(*) FROM rates;"
+
+      - name: Save the raw page for the fixture
+        if: always()
+        run: |
+          curl -sSk -o nbe-live.html --max-time 25 https://nbe.gov.et/exchange/ || true
+          ls -la nbe-live.html || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nbe-live-html
+          path: nbe-live.html
+          if-no-files-found: warn
