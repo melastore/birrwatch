@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 export interface Series {
   key: string;
@@ -19,7 +19,7 @@ interface Props {
   yLabel: string;
 }
 
-const M = { top: 12, right: 16, bottom: 28, left: 52 };
+const M = { top: 14, right: 18, bottom: 30, left: 54 };
 
 /**
  * A line/area chart drawn as plain SVG.
@@ -32,7 +32,7 @@ const M = { top: 12, right: 16, bottom: 28, left: 52 };
 export default function TimeSeriesChart({
   dates,
   series,
-  height = 240,
+  height = 260,
   area = false,
   formatValue,
   baselineAt,
@@ -41,29 +41,34 @@ export default function TimeSeriesChart({
   const wrapRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(720);
   const [hover, setHover] = useState<number | null>(null);
+  const uid = useId().replace(/:/g, "");
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = wrapRef.current;
     if (!el) return;
+
+    // Measure synchronously before the browser paints. A ResizeObserver's first
+    // callback is async, so relying on it alone means the chart paints once at
+    // its default width and then jumps to the real one.
+    const measure = (w: number) => setWidth(Math.max(300, Math.round(w)));
+    measure(el.getBoundingClientRect().width);
+
     const ro = new ResizeObserver(([entry]) => {
-      if (entry) setWidth(Math.max(320, entry.contentRect.width));
+      if (entry) measure(entry.contentRect.width);
     });
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
 
-  const plotW = width - M.left - M.right;
-  const plotH = height - M.top - M.bottom;
+  const plotW = Math.max(1, width - M.left - M.right);
+  const plotH = Math.max(1, height - M.top - M.bottom);
 
   const { yMin, yMax, ticks } = useMemo(() => {
     const all: number[] = [];
     for (const s of series) for (const v of s.values.values()) all.push(v);
     if (baselineAt !== undefined) all.push(baselineAt);
     if (all.length === 0) return { yMin: 0, yMax: 1, ticks: [0, 1] };
-
-    const lo = Math.min(...all);
-    const hi = Math.max(...all);
-    return niceScale(lo, hi);
+    return niceScale(Math.min(...all), Math.max(...all));
   }, [series, baselineAt]);
 
   const x = useCallback(
@@ -93,16 +98,10 @@ export default function TimeSeriesChart({
         });
         if (run.length) runs.push(run);
 
-        const line = runs
-          .filter((r) => r.length > 1)
-          .map((r) => r.map(([px, py], i) => `${i === 0 ? "M" : "L"}${px.toFixed(2)},${py.toFixed(2)}`).join(""))
-          .join(" ");
+        const draw = (r: Array<[number, number]>) =>
+          r.map(([px, py], i) => `${i === 0 ? "M" : "L"}${px.toFixed(2)},${py.toFixed(2)}`).join("");
 
-        // A run of one has no segment to stroke, so a lone observation would
-        // render as nothing at all. Sources publish on different calendars —
-        // NBE on business days, the parallel file whenever someone records a
-        // quote — so isolated points are normal, not an edge case.
-        const dots = runs.filter((r) => r.length === 1).map((r) => r[0]!);
+        const line = runs.filter((r) => r.length > 1).map(draw).join(" ");
 
         const fill = area
           ? runs
@@ -110,11 +109,15 @@ export default function TimeSeriesChart({
               .map((r) => {
                 const first = r[0]!;
                 const last = r[r.length - 1]!;
-                const top = r.map(([px, py], i) => `${i === 0 ? "M" : "L"}${px.toFixed(2)},${py.toFixed(2)}`).join("");
-                return `${top}L${last[0].toFixed(2)},${plotH}L${first[0].toFixed(2)},${plotH}Z`;
+                return `${draw(r)}L${last[0].toFixed(2)},${plotH}L${first[0].toFixed(2)},${plotH}Z`;
               })
               .join(" ")
           : "";
+
+        // A run of one has no segment to stroke, so a lone observation would
+        // render as nothing at all. Sources publish on different calendars, so
+        // isolated points are normal, not an edge case.
+        const dots = runs.filter((r) => r.length === 1).map((r) => r[0]!);
 
         return { series: s, line, fill, dots };
       }),
@@ -127,8 +130,7 @@ export default function TimeSeriesChart({
     const rect = svg.getBoundingClientRect();
     const px = clientX - rect.left - M.left;
     if (dates.length <= 1) return 0;
-    const i = Math.round((px / plotW) * (dates.length - 1));
-    return Math.min(dates.length - 1, Math.max(0, i));
+    return Math.min(dates.length - 1, Math.max(0, Math.round((px / plotW) * (dates.length - 1))));
   };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
@@ -141,8 +143,7 @@ export default function TimeSeriesChart({
     });
   };
 
-  // Show roughly six x labels regardless of range length.
-  const labelEvery = Math.max(1, Math.ceil(dates.length / 6));
+  const labelEvery = Math.max(1, Math.ceil(dates.length / (width < 480 ? 3 : 6)));
   const hoverDate = hover !== null ? dates[hover] : undefined;
 
   if (dates.length === 0) {
@@ -161,15 +162,32 @@ export default function TimeSeriesChart({
         onMouseMove={(e) => setHover(nearestIndex(e.clientX))}
         onMouseLeave={() => setHover(null)}
         onBlur={() => setHover(null)}
+        onTouchStart={(e) => {
+          const t = e.touches[0];
+          if (t) setHover(nearestIndex(t.clientX));
+        }}
+        onTouchMove={(e) => {
+          const t = e.touches[0];
+          if (t) setHover(nearestIndex(t.clientX));
+        }}
         style={{ display: "block", touchAction: "pan-y", outline: "none" }}
       >
+        <defs>
+          {series.map((s) => (
+            <linearGradient key={s.key} id={`${uid}-${s.key}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={s.color} stopOpacity="0.26" />
+              <stop offset="100%" stopColor={s.color} stopOpacity="0.02" />
+            </linearGradient>
+          ))}
+        </defs>
+
         <g transform={`translate(${M.left},${M.top})`}>
           {/* Recessive hairline grid — solid, one shade off the surface. */}
           {ticks.map((t) => (
             <g key={t}>
               <line x1={0} x2={plotW} y1={y(t)} y2={y(t)} stroke="var(--gridline)" strokeWidth={1} />
               <text
-                x={-10}
+                x={-12}
                 y={y(t)}
                 textAnchor="end"
                 dominantBaseline="middle"
@@ -195,13 +213,17 @@ export default function TimeSeriesChart({
 
           {area &&
             paths.map(({ series: s, fill }) =>
-              fill ? <path key={`f-${s.key}`} d={fill} fill={s.color} opacity={0.12} /> : null,
+              fill ? (
+                <path key={`f-${s.key}`} d={fill} fill={`url(#${uid}-${s.key})`} className="fade-in" />
+              ) : null,
             )}
 
           {paths.map(({ series: s, line }) =>
             line ? (
               <path
                 key={s.key}
+                className="draw"
+                pathLength={1}
                 d={line}
                 fill="none"
                 stroke={s.color}
@@ -214,7 +236,14 @@ export default function TimeSeriesChart({
 
           {paths.map(({ series: s, dots }) =>
             dots.map(([px, py]) => (
-              <circle key={`${s.key}-${px}`} cx={px} cy={py} r={4} fill={s.color} />
+              <circle
+                key={`${s.key}-${px}`}
+                className="fade-in"
+                cx={px}
+                cy={py}
+                r={4}
+                fill={s.color}
+              />
             )),
           )}
 
@@ -236,7 +265,7 @@ export default function TimeSeriesChart({
                     key={s.key}
                     cx={x(hover)}
                     cy={y(v)}
-                    r={4.5}
+                    r={5}
                     fill={s.color}
                     /* 2px surface ring instead of a border around the mark. */
                     stroke="var(--surface-1)"
@@ -254,7 +283,7 @@ export default function TimeSeriesChart({
               <text
                 key={d}
                 x={x(i)}
-                y={plotH + 17}
+                y={plotH + 18}
                 textAnchor={i === 0 ? "start" : i === dates.length - 1 ? "end" : "middle"}
                 fontSize={11}
                 fill="var(--text-muted)"
@@ -298,17 +327,17 @@ function Tooltip({
     .filter((r): r is { s: Series; v: number } => r.v !== undefined);
   if (rows.length === 0) return null;
 
-  // Flip the tooltip to the left of the crosshair near the right edge so it is
+  // Flip to the left of the crosshair near the right edge so the tooltip is
   // never clipped by the card.
-  const flip = x > chartWidth - 170;
+  const flip = x > chartWidth - 190;
 
   return (
     <div
       className="tooltip"
       style={{
-        left: flip ? undefined : x + 12,
-        right: flip ? chartWidth - x + 12 : undefined,
-        top: 8,
+        left: flip ? undefined : x + 14,
+        right: flip ? chartWidth - x + 14 : undefined,
+        top: 6,
       }}
     >
       <div className="t-date">{longDate(date)}</div>

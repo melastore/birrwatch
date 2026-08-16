@@ -10,6 +10,8 @@ import {
 import TimeSeriesChart, { type Series } from "./components/TimeSeriesChart";
 import StatTile from "./components/StatTile";
 import TableView from "./components/TableView";
+import ThemeToggle from "./components/ThemeToggle";
+import EmptyState from "./components/EmptyState";
 
 const OFFICIAL = "var(--series-official)";
 const PARALLEL = "var(--series-parallel)";
@@ -29,6 +31,14 @@ function isoDaysAgo(days: number) {
 
 const birr = (v: number) => v.toFixed(2);
 const pct = (v: number) => `${v.toFixed(1)}%`;
+
+/** Percent change across the visible window, or undefined if not computable. */
+function changePct(values: number[]) {
+  const first = values[0];
+  const last = values[values.length - 1];
+  if (first === undefined || last === undefined || values.length < 2 || first === 0) return undefined;
+  return ((last - first) / first) * 100;
+}
 
 export default function App() {
   const [currency, setCurrency] = useState("USD");
@@ -77,7 +87,7 @@ export default function App() {
     return () => ac.abort();
   }, [currency, rangeDays]);
 
-  const { dates, series, latestOfficial, latestParallel, latestSpread } = useMemo(() => {
+  const view = useMemo(() => {
     const official = new Map<string, number>();
     const parallel = new Map<string, number>();
     for (const r of rates) {
@@ -91,6 +101,9 @@ export default function App() {
       { key: "parallel", name: "Parallel market", color: PARALLEL, values: parallel },
     ];
 
+    const ordered = (m: Map<string, number>) =>
+      dates.map((d) => m.get(d)).filter((v): v is number => v !== undefined);
+
     const lastOf = (m: Map<string, number>) => {
       for (let i = dates.length - 1; i >= 0; i--) {
         const d = dates[i];
@@ -102,9 +115,14 @@ export default function App() {
       return undefined;
     };
 
+    const officialVals = ordered(official);
+    const parallelVals = ordered(parallel);
+
     return {
       dates,
       series,
+      officialVals,
+      parallelVals,
       latestOfficial: lastOf(official),
       latestParallel: lastOf(parallel),
       latestSpread: spread.length > 0 ? spread[spread.length - 1] : undefined,
@@ -124,27 +142,29 @@ export default function App() {
   );
   const spreadDates = useMemo(() => spread.map((p) => p.date), [spread]);
 
+  const { dates, series, officialVals, parallelVals, latestOfficial, latestParallel, latestSpread } =
+    view;
   const stale = loading && loaded ? "stale" : "";
+  const hasData = dates.length > 0;
 
   return (
     <div className="app">
       <header className="masthead">
-        <h1>Birrwatch</h1>
-        <p>
-          The National Bank of Ethiopia&rsquo;s indicative rate against the parallel market,
-          recorded daily. The gap between them is the number worth watching.
-        </p>
+        <div className="titles">
+          <h1>Birrwatch</h1>
+          <p>
+            The National Bank of Ethiopia&rsquo;s indicative rate against the parallel market,
+            recorded daily. The gap between them is the number worth watching.
+          </p>
+        </div>
+        <ThemeToggle />
       </header>
 
       {/* One filter row scoping every chart below it. */}
       <div className="filters">
         <div className="field">
           <label htmlFor="currency">Currency</label>
-          <select
-            id="currency"
-            value={currency}
-            onChange={(e) => setCurrency(e.target.value)}
-          >
+          <select id="currency" value={currency} onChange={(e) => setCurrency(e.target.value)}>
             {currencies.map((c) => (
               <option key={c} value={c}>
                 {c}
@@ -154,8 +174,10 @@ export default function App() {
         </div>
 
         <div className="field">
-          <label id="range-label">Range</label>
-          <div className="range-group" role="group" aria-labelledby="range-label">
+          <span className="label" id="range-label">
+            Range
+          </span>
+          <div className="segmented" role="group" aria-labelledby="range-label">
             {RANGES.map((r) => (
               <button
                 key={r.label}
@@ -168,7 +190,15 @@ export default function App() {
             ))}
           </div>
         </div>
+
         <div className="spacer" />
+
+        {hasData && latestOfficial && (
+          <span className="live-dot">
+            <i />
+            Updated {latestOfficial.date}
+          </span>
+        )}
       </div>
 
       {error && (
@@ -190,20 +220,33 @@ export default function App() {
 
       {!error && !loaded && loading && <div className="state">Loading&hellip;</div>}
 
-      {!error && loaded && (
+      {!error && loaded && !hasData && (
+        <div className="card reveal">
+          <EmptyState title="No rates recorded yet">
+            The history file is empty. Run <code>make scrape</code> to fetch today&rsquo;s rates
+            from the National Bank of Ethiopia, then commit <code>data/rates.csv</code>.
+          </EmptyState>
+        </div>
+      )}
+
+      {!error && loaded && hasData && (
         <div className={stale}>
-          <div className="tiles">
+          <div className="tiles reveal">
             <StatTile
               label="Official"
               color={OFFICIAL}
               value={latestOfficial ? birr(latestOfficial.value) : "—"}
               sub={latestOfficial ? `${currency} · ${latestOfficial.date}` : "no data"}
+              delta={changePct(officialVals)}
+              spark={officialVals}
             />
             <StatTile
               label="Parallel"
               color={PARALLEL}
               value={latestParallel ? birr(latestParallel.value) : "—"}
               sub={latestParallel ? `${currency} · ${latestParallel.date}` : "no data"}
+              delta={changePct(parallelVals)}
+              spark={parallelVals}
             />
             <StatTile
               label="Premium"
@@ -221,7 +264,7 @@ export default function App() {
             />
           </div>
 
-          <section className="card">
+          <section className="card reveal">
             <header>
               <h2>{currency} against the birr</h2>
               {/* Two series, so a legend is always present. */}
@@ -244,7 +287,7 @@ export default function App() {
                 series={series}
                 formatValue={birr}
                 yLabel={`Birr per ${currency}`}
-                height={260}
+                height={280}
               />
             </div>
             <TableView
@@ -258,7 +301,7 @@ export default function App() {
             />
           </section>
 
-          <section className="card">
+          <section className="card reveal">
             <header>
               <h2>Parallel-market premium</h2>
             </header>
@@ -273,7 +316,7 @@ export default function App() {
                 series={spreadSeries}
                 formatValue={pct}
                 yLabel="Premium over the official rate, percent"
-                height={200}
+                height={220}
                 area
                 baselineAt={0}
               />
@@ -294,9 +337,11 @@ export default function App() {
       )}
 
       <footer className="foot">
-        Official rates scraped from the National Bank of Ethiopia. Parallel-market figures are
-        hand-curated in <code>data/parallel.csv</code> and carry no official standing — check
-        the file before citing any of them.
+        <span>
+          Official rates scraped from the National Bank of Ethiopia. Parallel figures are
+          hand-curated in <code>data/parallel.csv</code> and carry no official standing.
+        </span>
+        <a href="https://github.com/melastore/birrwatch">Source on GitHub</a>
       </footer>
     </div>
   );
