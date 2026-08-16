@@ -63,8 +63,14 @@ func (c *CSV) Parse(raw []byte, _ time.Time) ([]model.Rate, error) {
 	if err != nil {
 		return nil, fmt.Errorf("parse csv %s: %w", c.path, err)
 	}
-	if len(records) < 2 {
-		return nil, fmt.Errorf("parse csv %s: need a header and at least one row", c.path)
+	if len(records) == 0 {
+		return nil, fmt.Errorf("parse csv %s: file has no header row", c.path)
+	}
+	// A header with no rows is a legitimate state: nobody has recorded a quote
+	// yet. Treating it as an error would make an honest empty file break the
+	// pipeline, which is precisely backwards.
+	if len(records) == 1 {
+		return nil, nil
 	}
 
 	idx := map[string]int{}

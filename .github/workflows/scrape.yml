@@ -62,10 +62,13 @@ jobs:
         run: ./bin/birrscrape -db birrwatch.db -source market
 
       - name: Load parallel-market file
+        continue-on-error: true
         run: ./bin/birrscrape -db birrwatch.db -source parallel -parallel-csv data/parallel.csv
 
+      # No -source: export only, so a failure above cannot stop the rates that
+      # were collected from being written out.
       - name: Export history
-        run: ./bin/birrscrape -db birrwatch.db -source parallel -parallel-csv data/parallel.csv -export data/rates.csv
+        run: ./bin/birrscrape -db birrwatch.db -source "" -export data/rates.csv
 
       - name: Commit if the rates moved
         run: |

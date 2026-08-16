@@ -63,6 +63,15 @@ func run() error {
 		return importRates(ctx, db, *importCSV, log)
 	}
 
+	// An empty -source means "do not scrape", which lets -export run on its own
+	// so a failing upstream cannot stop already-collected rates being written.
+	if *sourceName == "" {
+		if *exportCSV == "" {
+			return fmt.Errorf("nothing to do: pass -source, -import or -export")
+		}
+		return exportRates(ctx, db, *exportCSV, log)
+	}
+
 	registry := source.New(*parallelCSV)
 	if nbe, ok := registry["nbe"].(*source.NBE); ok {
 		nbe.URL = *nbeURL
