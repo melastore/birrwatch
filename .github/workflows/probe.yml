@@ -1,0 +1,39 @@
+name: Probe NBE TLS
+
+# Temporary diagnostic. Delete once the connection question is settled.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Certificate presented by nbe.gov.et
+        run: |
+          echo | openssl s_client -connect nbe.gov.et:443 -servername nbe.gov.et 2>/dev/null \
+            | openssl x509 -noout -subject -issuer -dates -ext subjectAltName || echo "s_client failed"
+
+      - name: HTTPS, verified
+        run: curl -sS -o /dev/null -w "%{http_code}\n" --max-time 20 https://nbe.gov.et/exchange-rate/ || true
+
+      - name: HTTPS, unverified
+        run: curl -sSk -o /tmp/k.html -w "%{http_code} bytes=%{size_download}\n" --max-time 20 https://nbe.gov.et/exchange-rate/ || true
+
+      - name: Plain HTTP
+        run: curl -sS -o /dev/null -w "%{http_code} -> %{redirect_url}\n" --max-time 20 http://nbe.gov.et/exchange-rate/ || true
+
+      - name: www variant
+        run: curl -sS -o /dev/null -w "%{http_code}\n" --max-time 20 https://www.nbe.gov.et/exchange-rate/ || true
+
+      - name: Does the unverified page contain a rate table?
+        run: |
+          if [ -s /tmp/k.html ]; then
+            echo "size: $(wc -c < /tmp/k.html)"
+            grep -io '<table' /tmp/k.html | wc -l | sed 's/^/tables: /'
+            grep -ioE 'currency|buying|selling' /tmp/k.html | sort | uniq -c || true
+          else
+            echo "no body retrieved"
+          fi
