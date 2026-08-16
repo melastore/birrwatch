@@ -12,6 +12,7 @@ import StatTile from "./components/StatTile";
 import TableView from "./components/TableView";
 import ThemeToggle from "./components/ThemeToggle";
 import EmptyState from "./components/EmptyState";
+import CurrencyPicker from "./components/CurrencyPicker";
 
 /**
  * Every source the dashboard knows about, in display order.
@@ -155,7 +156,6 @@ export default function App() {
       dates,
       series,
       tiles,
-      latestSpread: spread.length > 0 ? spread[spread.length - 1] : undefined,
     };
   }, [rates, spread]);
 
@@ -172,7 +172,7 @@ export default function App() {
   );
   const spreadDates = useMemo(() => spread.map((p) => p.date), [spread]);
 
-  const { dates, series, tiles, latestSpread } = view;
+  const { dates, series, tiles } = view;
   const stale = loading && loaded ? "stale" : "";
   const hasData = dates.length > 0;
   const newestDate = dates.length > 0 ? dates[dates.length - 1] : undefined;
@@ -193,14 +193,10 @@ export default function App() {
       {/* One filter row scoping every chart below it. */}
       <div className="filters">
         <div className="field">
-          <label htmlFor="currency">Currency</label>
-          <select id="currency" value={currency} onChange={(e) => setCurrency(e.target.value)}>
-            {currencies.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
+          <span className="label" id="currency-label">
+            Currency
+          </span>
+          <CurrencyPicker currencies={currencies} value={currency} onChange={setCurrency} />
         </div>
 
         <div className="field">
@@ -349,16 +345,6 @@ export default function App() {
             </section>
           )}
 
-          {latestSpread === undefined && (
-            <section className="card reveal">
-              <p className="caption" style={{ margin: 0 }}>
-                <strong>No premium shown.</strong> It needs NBE&rsquo;s official rate and a
-                parallel-market quote on the same day. NBE&rsquo;s own rates endpoint is
-                currently returning 404, and <code>data/parallel.csv</code> is empty by design —
-                only observed quotes belong in it.
-              </p>
-            </section>
-          )}
         </div>
       )}
 
