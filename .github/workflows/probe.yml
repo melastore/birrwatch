@@ -14,7 +14,7 @@ jobs:
       - name: Fetch the bundled JS
         run: |
           curl -sSk -o bundle.js --max-time 30 \
-            "https://nbe.gov.et/wp-content/litespeed/js/e25100f0024053ca0175bcc9ac180523.js?ver=80344"
+            "https://nbe.gov.et/wp-content/litespeed/js/c65f923e4317c6d0f884e5e9cc1c6d67.js?ver=80344"
           wc -c bundle.js
 
       - name: Find what populates the rate table
