@@ -2,9 +2,12 @@ name: Scrape rates
 
 on:
   schedule:
-    # 07:00 UTC on weekdays — 10:00 in Addis, after NBE posts the day's figure.
-    # NBE does not publish on weekends or public holidays.
-    - cron: "0 7 * * 1-5"
+    # 07:00 UTC daily — 10:00 in Addis, after NBE posts the day's figure.
+    #
+    # Every day rather than weekdays: NBE publishes on business days only, but
+    # the market reference moves at weekends too, and a weekend run costs
+    # nothing — an unchanged export produces no commit.
+    - cron: "0 7 * * *"
   workflow_dispatch:
     inputs:
       backfill_days:

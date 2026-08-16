@@ -159,7 +159,7 @@ data/parallel.csv        hand-recorded street quotes
 Three GitHub Actions workflows:
 
 - **CI** — gofmt, vet, `go test -race`, web build, on every push
-- **Scrape** — weekday mornings; records rates, exports, and commits only when a rate actually moved
+- **Scrape** — daily at 07:00 UTC; records rates, exports, and commits only when a rate actually moved
 - **Deploy** — publishes the dashboard to Pages, chained off the scrape so new rates reach the site
 
 ## License
