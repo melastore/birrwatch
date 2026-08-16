@@ -14,11 +14,25 @@ import (
 // DefaultMarketAPI returns every rate against a USD base in one request.
 const DefaultMarketAPI = "https://open.er-api.com/v6/latest/USD"
 
-// marketCurrencies are the currencies recorded, chosen to line up with the set
-// NBE publishes so the two series are comparable when NBE is available.
+// marketCurrencies are the currencies recorded.
+//
+// The list leads with the set NBE publishes, so the two series stay directly
+// comparable once NBE is available again, then extends to the currencies that
+// actually matter around Ethiopia: the Gulf states and East African neighbours
+// (remittances and cross-border trade) and the majors used for import pricing.
+// It is a fixed list rather than "everything the provider returns" so the
+// dataset does not silently change shape when the upstream adds a currency.
 var marketCurrencies = []string{
+	// Published by NBE.
 	"USD", "EUR", "GBP", "JPY", "CHF", "CAD", "AUD",
 	"SAR", "AED", "CNY", "INR", "ZAR", "KES", "SEK", "NOK", "DKK",
+	// Gulf — remittances and trade.
+	"KWD", "QAR", "BHD", "OMR", "ILS", "JOD", "LBP", "TRY",
+	// East and North Africa — neighbours and regional trade.
+	"DJF", "SDG", "SOS", "EGP", "TZS", "UGX", "RWF", "NGN", "GHS", "MAD",
+	// Majors and manufacturing partners.
+	"SGD", "HKD", "NZD", "KRW", "RUB", "BRL", "MXN", "PLN", "CZK",
+	"THB", "MYR", "IDR", "PHP", "VND", "PKR", "BDT", "LKR",
 }
 
 // Market reads reference rates from a public FX aggregator.

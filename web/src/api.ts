@@ -63,7 +63,11 @@ let cache: Promise<Rate[]> | null = null;
 
 function loadCSV(signal?: AbortSignal): Promise<Rate[]> {
   // Fetched once per page load; every filter runs against the same rows.
-  cache ??= fetch(CSV_URL, { signal })
+  // GitHub Pages serves this with max-age=600 at a URL that never changes, so a
+  // browser will happily show yesterday's rates on a page whose whole point is
+  // today's. "no-cache" still uses the cache, but revalidates against the ETag
+  // first — one cheap 304 instead of a stale dashboard.
+  cache ??= fetch(CSV_URL, { signal, cache: "no-cache" })
     .then((res) => {
       if (!res.ok) throw new Error(`${CSV_URL}: ${res.status} ${res.statusText}`);
       return res.text();
