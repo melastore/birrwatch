@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<!--
+  Synthetic fixture modelled on the shape of the NBE exchange rate page:
+  a WordPress shell, a decoy table before the real one, and a rate table whose
+  wrapper classes are meaningless. Figures are illustrative, not real quotes.
+
+  To lock in the real markup: save the live page over this file and re-run the
+  tests. Anything the parser gets wrong will surface immediately.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Exchange-Rate &#8211; National Bank of Ethiopia</title>
+</head>
+<body class="page-template-default page">
+<header id="masthead">
+  <nav class="main-navigation">
+    <ul><li><a href="/">Home</a></li><li><a href="/exchange-rate/">Exchange Rate</a></li></ul>
+  </nav>
+</header>
+
+<main id="content">
+  <article class="post-1234 page type-page">
+    <h1 class="entry-title">Daily Exchange Rate</h1>
+
+    <!-- Decoy: a layout table with no rate columns. Must not be selected. -->
+    <table class="wp-block-table quicklinks">
+      <tbody>
+        <tr><td>Directives</td><td>Publications</td></tr>
+        <tr><td>Annual Report</td><td>Monetary Policy</td></tr>
+        <tr><td>Contact Us</td><td>Careers</td></tr>
+      </tbody>
+    </table>
+
+    <p class="rate-date">Indicative Daily Exchange Rate as of 14 August 2026</p>
+
+    <figure class="wp-block-table is-style-stripes">
+      <table id="tablepress-9" class="tablepress dataTable no-footer">
+        <thead>
+          <tr>
+            <th class="column-1">Currency</th>
+            <th class="column-2">Cash Buying</th>
+            <th class="column-3">Cash Selling</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="row-2 odd"><td>US DOLLAR</td><td>155.4213</td><td>158.5297</td></tr>
+          <tr class="row-3 even"><td>EURO</td><td>168.9044</td><td>172.2825</td></tr>
+          <tr class="row-4 odd"><td>POUND STERLING</td><td>197.6631</td><td>201.6164</td></tr>
+          <tr class="row-5 even"><td>SWISS FRANC</td><td>180.2288</td><td>183.8334</td></tr>
+          <tr class="row-6 odd"><td>JAPANESE YEN</td><td>1.0512</td><td>1.0722</td></tr>
+          <tr class="row-7 even"><td>CANADIAN DOLLAR</td><td>112.7745</td><td>115.0300</td></tr>
+          <tr class="row-8 odd"><td>SAUDI RIYAL</td><td>41.4390</td><td>42.2678</td></tr>
+          <tr class="row-9 even"><td>UAE DIRHAM</td><td>42.3126</td><td>43.1589</td></tr>
+          <tr class="row-10 odd"><td>CHINESE YUAN</td><td>21.6604</td><td>22.0936</td></tr>
+          <tr class="row-11 even"><td>KENYAN SHILLING</td><td>1.2033</td><td>1.2274</td></tr>
+          <!-- Footnote row: no usable currency, must be skipped. -->
+          <tr class="row-12 odd"><td colspan="3">Rates are indicative and subject to change.</td></tr>
+        </tbody>
+      </table>
+    </figure>
+  </article>
+</main>
+
+<footer><p>&copy; 2026 National Bank of Ethiopia</p></footer>
+<script>document.title = document.title; var ignored = "Currency Buying Selling";</script>
+</body>
+</html>
