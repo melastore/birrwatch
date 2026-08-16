@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { fetchCurrencies, fetchRates, fetchSpread, type Rate, type SpreadPoint } from "./api";
+import {
+  dataMode,
+  fetchCurrencies,
+  fetchRates,
+  fetchSpread,
+  type Rate,
+  type SpreadPoint,
+} from "./api";
 import TimeSeriesChart, { type Series } from "./components/TimeSeriesChart";
 import StatTile from "./components/StatTile";
 import TableView from "./components/TableView";
@@ -168,7 +175,15 @@ export default function App() {
         <div className="state error">
           Could not load rates: {error}
           <div style={{ fontSize: 13, marginTop: 8, color: "var(--text-secondary)" }}>
-            Is <code>birrd</code> running?
+            {dataMode === "api" ? (
+              <>
+                Is <code>birrd</code> running?
+              </>
+            ) : (
+              <>
+                <code>rates.csv</code> could not be read.
+              </>
+            )}
           </div>
         </div>
       )}

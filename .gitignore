@@ -9,6 +9,8 @@ web/dist/
 web/node_modules/
 web/.vite/
 web/*.tsbuildinfo
+# staged from data/rates.csv at deploy time
+web/public/rates.csv
 
 # Editor / OS
 .DS_Store
