@@ -11,29 +11,35 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Certificate presented by nbe.gov.et
+      - name: Fetch the page
+        run: curl -sSk -o /tmp/p.html -w "%{http_code} bytes=%{size_download}\n" --max-time 25 https://nbe.gov.et/exchange-rate/
+
+      - name: Look for a rate table or a data endpoint
         run: |
-          echo | openssl s_client -connect nbe.gov.et:443 -servername nbe.gov.et 2>/dev/null \
-            | openssl x509 -noout -subject -issuer -dates -ext subjectAltName || echo "s_client failed"
+          echo "--- table-ish markup ---"
+          grep -ioE '<table|tablepress|datatable|<tbody' /tmp/p.html | sort | uniq -c || echo none
+          echo "--- currency words ---"
+          grep -ioE 'currency|buying|selling|exchange rate' /tmp/p.html | sort | uniq -c || echo none
+          echo "--- candidate endpoints ---"
+          grep -oE 'https?://[^"'"'"' ]*(wp-json|admin-ajax|rest_route|\.json)[^"'"'"' ]*' /tmp/p.html | sort -u | head -20 || echo none
+          echo "--- script srcs ---"
+          grep -oE 'src="[^"]+\.js[^"]*"' /tmp/p.html | sed 's/src="//;s/"$//' | sort -u | head -25 || echo none
+          echo "--- inline hints ---"
+          grep -oiE '(usd|dollar|birr)[^<]{0,60}' /tmp/p.html | head -15 || echo none
 
-      - name: HTTPS, verified
-        run: curl -sS -o /dev/null -w "%{http_code}\n" --max-time 20 https://nbe.gov.et/exchange-rate/ || true
-
-      - name: HTTPS, unverified
-        run: curl -sSk -o /tmp/k.html -w "%{http_code} bytes=%{size_download}\n" --max-time 20 https://nbe.gov.et/exchange-rate/ || true
-
-      - name: Plain HTTP
-        run: curl -sS -o /dev/null -w "%{http_code} -> %{redirect_url}\n" --max-time 20 http://nbe.gov.et/exchange-rate/ || true
-
-      - name: www variant
-        run: curl -sS -o /dev/null -w "%{http_code}\n" --max-time 20 https://www.nbe.gov.et/exchange-rate/ || true
-
-      - name: Does the unverified page contain a rate table?
+      - name: Try the WordPress REST index
         run: |
-          if [ -s /tmp/k.html ]; then
-            echo "size: $(wc -c < /tmp/k.html)"
-            grep -io '<table' /tmp/k.html | wc -l | sed 's/^/tables: /'
-            grep -ioE 'currency|buying|selling' /tmp/k.html | sort | uniq -c || true
-          else
-            echo "no body retrieved"
-          fi
+          curl -sSk -o /tmp/api.json -w "wp-json: %{http_code} bytes=%{size_download}\n" --max-time 25 https://nbe.gov.et/wp-json/ || true
+          grep -oE '"/[a-z0-9v/_-]*(exchange|rate|currency)[a-z0-9v/_-]*"' /tmp/api.json | sort -u | head -20 || echo "no rate routes"
+
+      - name: Try common rate endpoints
+        run: |
+          for p in \
+            "/wp-json/wp/v2/pages?search=exchange" \
+            "/wp-json/nbe/v1/exchange" \
+            "/wp-admin/admin-ajax.php?action=get_exchange_rate" \
+            "/exchange/" \
+            "/fx/" ; do
+            code=$(curl -sSk -o /tmp/t.out -w "%{http_code}" --max-time 20 "https://nbe.gov.et$p" || echo 000)
+            echo "$code  $p  bytes=$(wc -c < /tmp/t.out 2>/dev/null || echo 0)  tables=$(grep -ioc '<table' /tmp/t.out 2>/dev/null || echo 0)"
+          done
