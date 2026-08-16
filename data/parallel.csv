@@ -1,0 +1,31 @@
+# Parallel-market ETB quotes, hand-maintained.
+#
+# THESE ARE PLACEHOLDER VALUES. They exist so the dashboard renders on a fresh
+# clone and so the spread maths has something to chew on. They are not observed
+# quotes and must not be cited. Replace them with rates you have actually
+# sourced, and note where each one came from.
+#
+# There is no authoritative publisher for this series. That is a property of the
+# market, not a gap in this project: the aggregator sites that quote it disagree
+# with each other and revise silently, so a scraper pointed at one of them would
+# produce a confident-looking series with no defensible provenance. A file a
+# human edits, in version control, at least makes every number attributable to a
+# commit.
+#
+# Columns: date,currency,buying,selling  (selling optional for single-figure quotes)
+date,currency,buying,selling
+2026-08-03,USD,171.50,173.00
+2026-08-04,USD,172.00,173.50
+2026-08-05,USD,172.25,174.00
+2026-08-06,USD,173.00,174.50
+2026-08-07,USD,174.00,175.75
+2026-08-10,USD,175.50,177.00
+2026-08-11,USD,176.00,177.50
+2026-08-12,USD,176.75,178.25
+2026-08-13,USD,177.00,178.50
+2026-08-14,USD,178.50,180.00
+2026-08-03,EUR,186.00,188.00
+2026-08-05,EUR,187.50,189.50
+2026-08-07,EUR,189.00,191.00
+2026-08-11,EUR,190.25,192.50
+2026-08-14,EUR,192.00,194.25
