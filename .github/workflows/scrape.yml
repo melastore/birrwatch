@@ -35,7 +35,12 @@ jobs:
       - name: Restore history
         run: ./bin/birrscrape -db birrwatch.db -import data/rates.csv
 
+      # NBE is unreachable often enough — outages, holidays, TLS hiccups — that
+      # a failure here must not discard the rest of the run. The step is still
+      # marked failed and annotated, so a persistent outage is visible rather
+      # than silent, but the parallel file and the export below still happen.
       - name: Scrape NBE
+        continue-on-error: true
         run: ./bin/birrscrape -db birrwatch.db -source nbe
 
       - name: Load parallel-market file
