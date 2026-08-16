@@ -7,6 +7,9 @@ import "time"
 const (
 	SourceNBE      = "nbe"
 	SourceParallel = "parallel"
+	// SourceMarket is a commercial FX aggregate, kept distinct from NBE's
+	// official indicative rate so the two are never conflated.
+	SourceMarket = "market"
 )
 
 // Rate is one currency quote from one source on one day.

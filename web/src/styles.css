@@ -4,9 +4,10 @@
  * complete palette; the dark blocks redefine only what changes, guarded so an
  * explicit light choice still beats an OS dark preference.
  *
- * Series colors are the two lead slots of a CVD-validated categorical palette
- * (adjacent deltaE 24.7 light / 26.8 dark against an >=8 threshold). Do not
- * change them without re-validating.
+ * Series colors are the three lead slots of a CVD-validated categorical palette
+ * (worst adjacent deltaE 9.2 light / 9.4 dark against an >=8 threshold). Aqua
+ * sits below 3:1 on the light surface, which the table views satisfy as relief.
+ * Do not change them without re-validating.
  */
 :root {
   color-scheme: light;
@@ -27,6 +28,7 @@
 
   --series-official: #2a78d6;
   --series-parallel: #eb6834;
+  --series-market: #1baf7a;
   --critical: #d03b3b;
 
   --shadow-sm: 0 1px 2px rgba(11, 11, 11, 0.04), 0 1px 3px rgba(11, 11, 11, 0.03);
@@ -69,6 +71,7 @@
 
     --series-official: #3987e5;
     --series-parallel: #d95926;
+    --series-market: #199e70;
     --critical: #e66767;
 
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
@@ -96,6 +99,7 @@
 
   --series-official: #3987e5;
   --series-parallel: #d95926;
+  --series-market: #199e70;
   --critical: #e66767;
 
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);

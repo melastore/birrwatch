@@ -36,7 +36,8 @@ type Registry map[string]Source
 // manually-maintained parallel-market file; it may be empty.
 func New(parallelCSV string) Registry {
 	r := Registry{
-		model.SourceNBE: NewNBE(),
+		model.SourceNBE:    NewNBE(),
+		model.SourceMarket: NewMarket(),
 	}
 	if parallelCSV != "" {
 		r[model.SourceParallel] = NewCSV(model.SourceParallel, parallelCSV)
@@ -56,7 +57,7 @@ func (r Registry) Get(name string) (Source, error) {
 // Names lists registered source names in a stable order.
 func (r Registry) Names() []string {
 	out := make([]string, 0, len(r))
-	for _, n := range []string{model.SourceNBE, model.SourceParallel} {
+	for _, n := range []string{model.SourceNBE, model.SourceMarket, model.SourceParallel} {
 		if _, ok := r[n]; ok {
 			out = append(out, n)
 		}

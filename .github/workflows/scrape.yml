@@ -55,6 +55,12 @@ jobs:
             ./bin/birrscrape -db birrwatch.db -source nbe
           fi
 
+      # Independent of NBE, so the dashboard has a real number even while their
+      # endpoint is down.
+      - name: Record the market reference rate
+        continue-on-error: true
+        run: ./bin/birrscrape -db birrwatch.db -source market
+
       - name: Load parallel-market file
         run: ./bin/birrscrape -db birrwatch.db -source parallel -parallel-csv data/parallel.csv
 
