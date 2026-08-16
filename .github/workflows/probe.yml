@@ -11,36 +11,43 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "1.26"
-          cache-dependency-path: server/go.sum
-
-      - name: Build
-        working-directory: server
-        run: CGO_ENABLED=0 go build -o ../bin/birrscrape ./cmd/birrscrape
-
-      - name: Scrape the live site
-        run: ./bin/birrscrape -db probe.db -source nbe
-
-      - name: Show what was parsed
+      - name: Fetch the bundled JS
         run: |
-          sudo apt-get install -qq -y sqlite3 >/dev/null 2>&1
-          echo "--- rates ---"
-          sqlite3 -header -column probe.db "SELECT currency, date, buying, selling FROM rates ORDER BY currency;"
-          echo "--- counts ---"
-          sqlite3 probe.db "SELECT 'rows', COUNT(*) FROM rates;"
+          curl -sSk -o bundle.js --max-time 30 \
+            "https://nbe.gov.et/wp-content/litespeed/js/e25100f0024053ca0175bcc9ac180523.js?ver=80344"
+          wc -c bundle.js
 
-      - name: Save the raw page for the fixture
-        if: always()
+      - name: Find what populates the rate table
         run: |
-          curl -sSk -o nbe-live.html --max-time 25 https://nbe.gov.et/exchange/ || true
-          ls -la nbe-live.html || true
+          python3 - <<'PY'
+          import re
+          s = open("bundle.js", encoding="utf-8", errors="replace").read()
+          print("=== exchangeData mentions ===")
+          for m in re.finditer(r'exchangeData\w*', s):
+              print(m.start(), repr(s[max(0,m.start()-500):m.start()+500]))
+              print()
+          print("=== url-ish strings with exchange/rate/api ===")
+          for u in sorted(set(re.findall(r'["\'`][^"\'`]{0,160}(?:exchange|admin-ajax|wp-json|rest_route|/api/)[^"\'`]{0,160}["\'`]', s, re.I))):
+              print(" ", u[:220])
+          PY
+
+      - name: Try the REST page object
+        run: |
+          curl -sSk --max-time 25 "https://nbe.gov.et/wp-json/wp/v2/pages/24254" -o page.json
+          python3 -c "
+          import json,re
+          d=json.load(open('page.json'))
+          c=d.get('content',{}).get('rendered','')
+          print('content bytes:', len(c))
+          print('tables:', len(re.findall(r'<table', c, re.I)))
+          print('has empty tbody:', 'exchangeData2q1' in c)
+          "
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: nbe-live-html
-          path: nbe-live.html
+          name: nbe-bundle
+          path: |
+            bundle.js
+            page.json
           if-no-files-found: warn
