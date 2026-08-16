@@ -1,0 +1,57 @@
+name: Scrape rates
+
+on:
+  schedule:
+    # 07:00 UTC on weekdays — 10:00 in Addis, after NBE posts the day's figure.
+    # NBE does not publish on weekends or public holidays.
+    - cron: "0 7 * * 1-5"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# Two runs writing data/rates.csv at once would race on the push.
+concurrency:
+  group: scrape
+  cancel-in-progress: false
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+          cache-dependency-path: server/go.sum
+
+      - name: Build scraper
+        working-directory: server
+        run: CGO_ENABLED=0 go build -o ../bin/birrscrape ./cmd/birrscrape
+
+      # The runner is fresh every time, so rebuild the database from the
+      # committed history before adding to it.
+      - name: Restore history
+        run: ./bin/birrscrape -db birrwatch.db -import data/rates.csv
+
+      - name: Scrape NBE
+        run: ./bin/birrscrape -db birrwatch.db -source nbe
+
+      - name: Load parallel-market file
+        run: ./bin/birrscrape -db birrwatch.db -source parallel -parallel-csv data/parallel.csv
+
+      - name: Export history
+        run: ./bin/birrscrape -db birrwatch.db -source parallel -parallel-csv data/parallel.csv -export data/rates.csv
+
+      - name: Commit if the rates moved
+        run: |
+          if git diff --quiet -- data/rates.csv; then
+            echo "No change in today's rates."
+            exit 0
+          fi
+          git config user.name "melastore"
+          git config user.email "melastore@users.noreply.github.com"
+          git add data/rates.csv
+          git commit -m "data: rates for $(date -u +%Y-%m-%d)"
+          git push
