@@ -8,6 +8,7 @@
 web/dist/
 web/node_modules/
 web/.vite/
+web/*.tsbuildinfo
 
 # Editor / OS
 .DS_Store
