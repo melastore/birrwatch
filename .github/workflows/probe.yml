@@ -11,43 +11,36 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Fetch the bundled JS
+      - name: Certificate on api.nbe.gov.et
         run: |
-          curl -sSk -o bundle.js --max-time 30 \
-            "https://nbe.gov.et/wp-content/litespeed/js/c65f923e4317c6d0f884e5e9cc1c6d67.js?ver=80344"
-          wc -c bundle.js
+          echo | openssl s_client -connect api.nbe.gov.et:443 -servername api.nbe.gov.et 2>/dev/null \
+            | openssl x509 -noout -subject -issuer -ext subjectAltName || echo "s_client failed"
 
-      - name: Find what populates the rate table
-        run: |
-          python3 - <<'PY'
-          import re
-          s = open("bundle.js", encoding="utf-8", errors="replace").read()
-          print("=== exchangeData mentions ===")
-          for m in re.finditer(r'exchangeData\w*', s):
-              print(m.start(), repr(s[max(0,m.start()-500):m.start()+500]))
-              print()
-          print("=== url-ish strings with exchange/rate/api ===")
-          for u in sorted(set(re.findall(r'["\'`][^"\'`]{0,160}(?:exchange|admin-ajax|wp-json|rest_route|/api/)[^"\'`]{0,160}["\'`]', s, re.I))):
-              print(" ", u[:220])
-          PY
+      - name: Verified TLS?
+        run: curl -sS -o /dev/null -w "verified: %{http_code}\n" --max-time 20 "https://api.nbe.gov.et/api/filter-exchange-rates?date=2026-08-14" || true
 
-      - name: Try the REST page object
+      - name: Today
         run: |
-          curl -sSk --max-time 25 "https://nbe.gov.et/wp-json/wp/v2/pages/24254" -o page.json
-          python3 -c "
-          import json,re
-          d=json.load(open('page.json'))
-          c=d.get('content',{}).get('rendered','')
-          print('content bytes:', len(c))
-          print('tables:', len(re.findall(r'<table', c, re.I)))
-          print('has empty tbody:', 'exchangeData2q1' in c)
-          "
+          curl -sSk --max-time 25 "https://api.nbe.gov.et/api/filter-exchange-rates?date=$(date -u +%F)" -o today.json
+          echo "bytes: $(wc -c < today.json)"
+          head -c 900 today.json; echo
+
+      - name: A past date (does history work?)
+        run: |
+          for d in 2026-08-14 2026-06-02 2026-01-15 2025-09-11; do
+            curl -sSk --max-time 25 "https://api.nbe.gov.et/api/filter-exchange-rates?date=$d" -o "d.json"
+            n=$(python3 -c "import json;print(len(json.load(open('d.json')).get('data',[])))" 2>/dev/null || echo ERR)
+            first=$(python3 -c "
+          import json
+          d=json.load(open('d.json')).get('data',[])
+          print(d[0] if d else '-')
+          " 2>/dev/null || echo ERR)
+            echo "$d -> rows=$n  first=$first"
+          done
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: nbe-bundle
-          path: |
-            bundle.js
-            page.json
+          name: nbe-api
+          path: today.json
           if-no-files-found: warn
