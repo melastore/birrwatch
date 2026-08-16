@@ -1,0 +1,16 @@
+# Derived from data/rates.csv — never the store of record.
+*.db
+*.db-wal
+*.db-shm
+
+# Build output
+/bin/
+web/dist/
+web/node_modules/
+web/.vite/
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
