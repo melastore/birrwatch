@@ -1,0 +1,53 @@
+{
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "date": "2026-08-14",
+      "currency": { "id": 1, "name": "US Dollar", "code": "USD" },
+      "weighted_average": "155.4213"
+    },
+    {
+      "id": 2,
+      "date": "2026-08-14",
+      "currency": { "id": 2, "name": "Euro", "code": "EUR" },
+      "weighted_average": "168.9044"
+    },
+    {
+      "id": 3,
+      "date": "2026-08-14",
+      "currency": { "id": 3, "name": "Pound Sterling", "code": "GBP" },
+      "weighted_average": 197.6631
+    },
+    {
+      "id": 4,
+      "date": "2026-08-14",
+      "currency": { "id": 4, "name": "Japanese Yen", "code": "JPY" },
+      "weighted_average": "1.0512"
+    },
+    {
+      "id": 5,
+      "date": "2026-08-14",
+      "currency": { "id": 5, "name": "Kenyan Shilling", "code": "KES" },
+      "weighted_average": "1.2033"
+    },
+    {
+      "id": 6,
+      "date": "2026-08-14",
+      "currency": { "id": 6, "name": "", "code": "" },
+      "weighted_average": "9.9999"
+    },
+    {
+      "id": 7,
+      "date": "2026-08-14",
+      "currency": { "id": 7, "name": "Swiss Franc", "code": "CHF" },
+      "weighted_average": "0"
+    },
+    {
+      "id": 8,
+      "date": "2026-08-14",
+      "currency": { "id": 1, "name": "US Dollar", "code": "USD" },
+      "weighted_average": "999.0000"
+    }
+  ]
+}

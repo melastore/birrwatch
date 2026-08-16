@@ -9,6 +9,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log/slog"
@@ -34,7 +35,8 @@ func run() error {
 		dbPath      = flag.String("db", "birrwatch.db", "path to the SQLite database")
 		sourceName  = flag.String("source", "nbe", "source to scrape")
 		parallelCSV = flag.String("parallel-csv", "data/parallel.csv", "path to the curated parallel-market CSV")
-		nbeURL      = flag.String("nbe-url", source.DefaultNBEURL, "override the NBE page URL")
+		nbeURL      = flag.String("nbe-url", source.DefaultNBEAPI, "override the NBE API endpoint")
+		backfill    = flag.Int("backfill", 0, "also fetch this many days before today (NBE only)")
 		reparse     = flag.Bool("reparse", false, "re-parse archived snapshots instead of fetching")
 		importCSV   = flag.String("import", "", "load rates from a CSV into the database, then exit")
 		exportCSV   = flag.String("export", "", "write all rates to a CSV after running")
@@ -71,9 +73,16 @@ func run() error {
 		return err
 	}
 
-	if *reparse {
+	switch {
+	case *reparse:
 		err = reparseSnapshots(ctx, db, src, log)
-	} else {
+	case *backfill > 0:
+		nbe, ok := src.(*source.NBE)
+		if !ok {
+			return fmt.Errorf("-backfill only applies to the nbe source")
+		}
+		err = backfillDays(ctx, db, nbe, *backfill, log)
+	default:
 		err = scrapeOnce(ctx, db, src, log)
 	}
 	if err != nil {
@@ -172,6 +181,67 @@ func scrapeOnce(ctx context.Context, db *store.Store, src source.Source, log *sl
 // reparseSnapshots replays the archive through the current parser. This is the
 // payoff for storing raw payloads: a parser fix repairs history retroactively
 // instead of leaving a permanent gap in the series.
+// backfillDays walks backwards from today, one request per day.
+//
+// The endpoint takes a date, so history is retrievable rather than only the
+// current figure. Days with no publication — weekends, public holidays — come
+// back empty and are skipped rather than treated as failures; that is the
+// normal shape of the calendar, not an error.
+func backfillDays(ctx context.Context, db *store.Store, nbe *source.NBE, days int, log *slog.Logger) error {
+	today := time.Now().UTC()
+	var filled, empty, failed, total int
+
+	for i := days; i >= 0; i-- {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		day := today.AddDate(0, 0, -i)
+		nbe.Date = day
+		label := day.Format("2006-01-02")
+
+		raw, err := nbe.Fetch(ctx)
+		if err != nil {
+			failed++
+			log.Warn("backfill fetch failed", "date", label, "err", err)
+			continue
+		}
+		if _, err := db.SaveSnapshot(ctx, nbe.Name(), day, raw); err != nil {
+			return err
+		}
+
+		rates, err := nbe.Parse(raw, day)
+		if err != nil {
+			if errors.Is(err, source.ErrNoRates) {
+				empty++
+				continue
+			}
+			failed++
+			log.Warn("backfill parse failed", "date", label, "err", err)
+			continue
+		}
+
+		n, err := db.UpsertRates(ctx, rates)
+		if err != nil {
+			return err
+		}
+		filled++
+		total += n
+
+		// The endpoint is a small government service; do not hammer it.
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(250 * time.Millisecond):
+		}
+	}
+
+	log.Info("backfill complete", "days", days+1, "with_rates", filled, "no_publication", empty, "failed", failed, "rates", total)
+	if filled == 0 {
+		return fmt.Errorf("backfill produced no rates across %d days", days+1)
+	}
+	return nil
+}
+
 func reparseSnapshots(ctx context.Context, db *store.Store, src source.Source, log *slog.Logger) error {
 	snaps, err := db.Snapshots(ctx, src.Name())
 	if err != nil {

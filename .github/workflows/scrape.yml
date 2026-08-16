@@ -6,6 +6,11 @@ on:
     # NBE does not publish on weekends or public holidays.
     - cron: "0 7 * * 1-5"
   workflow_dispatch:
+    inputs:
+      backfill_days:
+        description: "Also fetch this many days of history before today"
+        required: false
+        default: "0"
 
 permissions:
   contents: write
@@ -41,7 +46,14 @@ jobs:
       # than silent, but the parallel file and the export below still happen.
       - name: Scrape NBE
         continue-on-error: true
-        run: ./bin/birrscrape -db birrwatch.db -source nbe
+        env:
+          BACKFILL: ${{ github.event.inputs.backfill_days || '0' }}
+        run: |
+          if [ "$BACKFILL" -gt 0 ]; then
+            ./bin/birrscrape -db birrwatch.db -source nbe -backfill "$BACKFILL" -timeout 30m
+          else
+            ./bin/birrscrape -db birrwatch.db -source nbe
+          fi
 
       - name: Load parallel-market file
         run: ./bin/birrscrape -db birrwatch.db -source parallel -parallel-csv data/parallel.csv
